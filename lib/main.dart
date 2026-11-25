@@ -700,4 +700,281 @@ class _HomePageState extends State<HomePage> {
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: i == _bratIndex ? limeColor : Colors.white30,
-         
+                        width: i == _bratIndex ? 3 : 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            bc.name,
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _thumbNetwork(String url) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Image.network(
+        url,
+        width: 80,
+        height: 56,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          width: 80,
+          height: 56,
+          color: Colors.white12,
+          child: const Icon(Icons.music_note),
+        ),
+      ),
+    );
+  }
+
+  Widget _searchTab() {
+    if (_searching) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_results.isEmpty) {
+      return const Center(
+        child: Text('escribe arriba para buscar música',
+            style: TextStyle(color: Colors.white54)),
+      );
+    }
+    return ListView.builder(
+      itemCount: _results.length,
+      itemBuilder: (_, i) {
+        final v = _results[i];
+        final id = v.id.value;
+        final downloaded = _library.any((t) => t.id == id);
+        final prog = _progress[id];
+        Widget trailing;
+        if (prog != null) {
+          trailing = SizedBox(
+            width: 26,
+            height: 26,
+            child: CircularProgressIndicator(
+              value: prog > 0 ? prog : null,
+              strokeWidth: 3,
+            ),
+          );
+        } else if (downloaded) {
+          trailing = const Icon(Icons.check_circle, color: limeColor);
+        } else {
+          trailing = const Icon(Icons.download);
+        }
+        return ListTile(
+          leading: _thumbNetwork(v.thumbnails.mediumResUrl),
+          title: Text(v.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+            '${v.author} · ${v.duration != null ? fmt(v.duration!) : '--:--'}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: trailing,
+          onTap: prog != null ? null : () => _onResultTap(v),
+        );
+      },
+    );
+  }
+
+  Widget _libraryTab() {
+    if (_library.isEmpty) {
+      return const Center(
+        child: Text('tu biblioteca offline está vacía',
+            style: TextStyle(color: Colors.white54)),
+      );
+    }
+    return ListView.builder(
+      itemCount: _library.length,
+      itemBuilder: (_, i) {
+        final t = _library[i];
+        final thumb = File(t.thumbPath);
+        final playing = _current?.id == t.id;
+        return ListTile(
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: thumb.existsSync()
+                ? Image.file(thumb, width: 56, height: 56, fit: BoxFit.cover)
+                : Container(
+                    width: 56,
+                    height: 56,
+                    color: Colors.white12,
+                    child: const Icon(Icons.music_note),
+                  ),
+          ),
+          title: Text(
+            t.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: playing ? limeColor : null),
+          ),
+          subtitle: Text(
+            '${t.artist} · ${fmt(Duration(milliseconds: t.durationMs))}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => _delete(t),
+          ),
+          onTap: () {
+            setState(() => _tab = 0);
+            _playQueue(_library, i);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _controls() {
+    final t = _current;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFF161616),
+        border: Border(top: BorderSide(color: Colors.white12)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            t?.title ?? 'sin reproducir',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
+          Text(
+            t?.artist ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+          AnimatedBuilder(
+            animation: Listenable.merge([_pos, _dur]),
+            builder: (_, __) {
+              final maxMs = math
+                  .max(_dur.value.inMilliseconds, t?.durationMs ?? 0)
+                  .clamp(1, 1 << 31)
+                  .toDouble();
+              final cur = (_drag ?? _pos.value.inMilliseconds.toDouble())
+                  .clamp(0.0, maxMs);
+              return Column(
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      activeTrackColor: limeColor,
+                      thumbColor: limeColor,
+                      inactiveTrackColor: Colors.white24,
+                    ),
+                    child: Slider(
+                      value: cur,
+                      min: 0,
+                      max: maxMs,
+                      onChanged: (v) => setState(() => _drag = v),
+                      onChangeEnd: (v) async {
+                        await _player.seek(Duration(milliseconds: v.round()));
+                        if (mounted) setState(() => _drag = null);
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(fmt(Duration(milliseconds: cur.round())),
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.white54)),
+                        Text(fmt(Duration(milliseconds: maxMs.round())),
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.white54)),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                iconSize: 38,
+                icon: const Icon(Icons.skip_previous),
+                onPressed: _prev,
+              ),
+              const SizedBox(width: 12),
+              StreamBuilder<PlayerState>(
+                stream: _player.playerStateStream,
+                builder: (_, snap) {
+                  final st = snap.data;
+                  final playing = st?.playing ?? false;
+                  final busy = st?.processingState == ProcessingState.loading ||
+                      st?.processingState == ProcessingState.buffering;
+                  return Container(
+                    width: 64,
+                    height: 64,
+                    decoration: const BoxDecoration(
+                        color: limeColor, shape: BoxShape.circle),
+                    child: busy
+                        ? const Padding(
+                            padding: EdgeInsets.all(18),
+                            child: CircularProgressIndicator(
+                              color: Colors.black,
+                              strokeWidth: 3,
+                            ),
+                          )
+                        : IconButton(
+                            iconSize: 38,
+                            color: Colors.black,
+                            icon: Icon(
+                                playing ? Icons.pause : Icons.play_arrow),
+                            onPressed: _toggle,
+                          ),
+                  );
+                },
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                iconSize: 38,
+                icon: const Icon(Icons.skip_next),
+                onPressed: _next,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            _searchBar(),
+            _tabs(),
+            Expanded(
+              child: IndexedStack(
+                index: _tab,
+                children: [
+                  _playerTab(),
+                  _searchTab(),
+                  _libraryTab(),
+                ],
+              ),
+            ),
+            _controls(),
+          ],
+        ),
+      ),
+    );
+  }
+}
