@@ -1,0 +1,20 @@
+name: brat_player
+description: Reproductor de musica con letras estilo Brat.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  youtube_explode_dart: ^2.3.5
+  just_audio: ^0.9.40
+  http: ^1.2.2
+  path_provider: ^2.1.4
+  permission_handler: ^11.3.1
+
+flutter:
+  uses-material-design: true
+  
